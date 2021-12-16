@@ -1,0 +1,23 @@
+# Importar biblioteca
+import pandas as pd
+import MySQLdb  # para o MySQL
+
+# con = MySQLdb.connect(host="IP",  port=PORTA, user="LOGIIN", passwd="SENHA", db="DB")
+con = MySQLdb.connect(host="IP", port=PORTA, user="LOGIN", passwd="SENHA",
+                      db="metro_baixa")
+con.select_db('metro_baixa')
+cursor = con.cursor()
+
+TABELA = pd.read_excel(
+    r"C:/Projetos/Indicadores-Metro-Baixa-v1/bases/base-normalizada-ind-metro-baixo-20210809_Fev.xlsx")
+TABELA.dropna(inplace=True)
+TABELA.head()
+
+for i, row in TABELA.iterrows():
+    sql = "INSERT INTO metro_baixa.tb_ind_metro_baixa VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+    cursor.execute(sql, tuple(row))
+    print("Record inserted")
+
+#con.commit()
+
+#con.close()
