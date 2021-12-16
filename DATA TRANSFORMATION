@@ -1,0 +1,282 @@
+
+# coding: utf-8
+
+# In[1]:
+
+
+import os
+import glob
+from pathlib import Path
+import pandas as pd
+from datetime import date
+import re
+import numpy as np
+from time import sleep
+import tkinter as tk
+from tkinter import messagebox
+
+
+# In[2]:
+
+
+def F_PEGA_ARQ_RECENTE():
+    # Pega arquivo mais recente
+        try:
+            from os.path import getmtime
+            myhost = str(os.getlogin())
+            directory = Path('C:/Users/'+ myhost +'/Downloads')            
+            files = directory.glob('*executores*.csv')
+            arquivo_mais_recente = max(files, key=getmtime)
+        except(FileExistsError, FileNotFoundError) as erro:
+            print('Problemas ao pegar arquivo mais recente (1). \n', erro)
+        except(Exception) as erro:
+            print('Problemas ao pegar arquivo mais recente (2).  \n', erro)
+            raise
+        else:
+            print('Lendo arquivo: '+ str(arquivo_mais_recente))
+        return (str(arquivo_mais_recente))
+
+
+# In[3]:
+
+
+def F_LENDO_CSV(v_path, v_separador):    
+        #Lendo a base de dados  \n
+        #v_path vai receber o caminho que esta o arquivo a ser lido. \n
+        #v_separador é a separação das colunas no arquivo ldo.\n
+    
+    try:
+        df = pd.read_csv(v_path,                                          engine= 'python',                                          sep = v_separador, 
+                                         encoding = "utf-8")         
+    except(FileExistsError, FileNotFoundError) as erro:
+        print('Problemas com arquivo (1). \n', erro)
+    except(Exception) as erro:
+        print('Problemas com arquivo (2).  \n', erro)
+    else:
+        print('Dataframe criado com sucesso!')
+    return df
+
+
+# In[4]:
+
+
+def F_PADRONIZA_STATUS(df):
+    #Função que trata letras com acentuação
+    try:
+        df = df
+        df['Status Execucao'] = df['Status Execucao']            .str.replace('É','E')            .str.replace('Á','A')            .str.replace('Ã','A')            .str.replace('ã','a')            .str.replace('Ç','C')            .str.replace('Õ','O')
+        
+        
+        df = df
+        df['Ocorrencias'] = df['Ocorrencias']            .str.replace('É','E')            .str.replace('Á','A')            .str.replace('Ã','A')            .str.replace('ã','a')            .str.replace('Ç','C')            .str.replace('Õ','O')
+        
+        
+        conditions = [
+            (df['Status Execucao'].str.contains('ROLLBACK',flags=re.IGNORECASE, regex=True)== True),
+            (df['Status Execucao'].str.contains('EXECUTADO OK',flags=re.IGNORECASE, regex=True)== True),
+            (df['Status Execucao'].str.contains('NAO EXECUTADO',flags=re.IGNORECASE, regex=True)== True),
+            (df['Status Execucao'].str.contains('PARCIAL',flags=re.IGNORECASE, regex=True)== True),
+            (df['Status Execucao'].str.contains('CANCELADO',flags=re.IGNORECASE, regex=True)== True),
+            (df['Status Execucao'].str.contains('TP/SM Pendente',flags=re.IGNORECASE, regex=True)== True),
+            (df['Status Execucao'].str.contains('TP/SM Cancelada',flags=re.IGNORECASE, regex=True)== True),
+            (df['Status Execucao'].isnull()),
+            ((df['Status Execucao'].str.contains('Outros',flags=re.IGNORECASE, regex=True)== True) & (df['Ocorrencias'].str.contains('NAO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)),
+            ((df['Status Execucao'].str.contains('Outros',flags=re.IGNORECASE, regex=True)== True) & (df['Ocorrencias'].str.contains('NAO EXECUTADA',flags=re.IGNORECASE, regex=True)== True)),
+            ((df['Status Execucao'].str.contains('Outros',flags=re.IGNORECASE, regex=True)== True) & (df['Ocorrencias'].str.contains('Parcial',flags=re.IGNORECASE, regex=True)== True)),
+            (df['Status Execucao'].str.contains('EXECUTADO TÚNEIS OK',flags=re.IGNORECASE, regex=True)== True),
+            
+        ]
+        
+        
+        values = [
+            'NÃO EXECUTADO',
+            'EXECUTADO',
+            'NÃO EXECUTADO',
+            'EXECUTADO',
+            'CANCELADO',
+            'CANCELADO',
+            'CANCELADO',
+            'CANCELADO',
+            'NÃO EXECUTADO',
+            'NÃO EXECUTADO',
+            'EXECUTADO',
+            'EXECUTADO',
+        ]
+        
+        dfalta['STATUS_NORMALIZADO'] = np.select(conditions, values)
+        
+        
+        
+    except(Exception) as erro:
+        print('Problemas com transformação do campo STATUS_NORMALIZADO. Erro: ', erro)
+    
+    else:
+        print('Coluna STATUS_NORMALIZADO criada com sucesso!')
+    return df
+
+
+# In[5]:
+
+
+def F_PADRONIZA_REPORT(df):
+    #Cria uma nova coluna com o report de cada atividade
+    try:
+       
+        df = df
+        df['Status Execucao'] = df['Status Execucao']             .str.replace('É','E')             .str.replace('Á','A')             .str.replace('Ã','A')             .str.replace('Â','A')             .str.replace('â','a')             .str.replace('ã','a')             .str.replace('Ç','C')             .str.replace('Õ','O')
+            
+            
+        conditions = [
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('PROBLEMA DE INFRA',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('ERRO DE PROCEDIMENTO',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('ERRO DE PLANEJAMENTO PROJETO',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('ACESSO AO SITE',flags=re.IGNORECASE, regex=True)== True), 
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('ACESSO AO EQUIPAMENTO',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('ERRO DE ELABORACAO DE  SCRIPT',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('FALHA DE SOFTWARE',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('FALTA DE TP',flags=re.IGNORECASE, regex=True)== True), 
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('AUSÊNCIA DE TECNICO',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('FALHA DE PLANEJAMENTO DE PROJETO',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('FALTA DE TEMPO DE EXECUCAO',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('FALHA DE HARDWARE',flags=re.IGNORECASE, regex=True)== True), 
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('CONFIGURACOES JA APLICADAS',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('FORA DO CRONOGRAMA',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('FALHA DE TX',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('TP ESTAR ABERTO SEM AFETACAO',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('EQUIPAMENTO COM AFETACAO OU SEM REDUNDANCIA',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('FALTA DE LICENCA',flags=re.IGNORECASE, regex=True)== True),
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('AFETACAO OU SEM REDUNDÂNCIA',flags=re.IGNORECASE, regex=True)== True),            
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('Sem sucesso – Com Rollback',flags=re.IGNORECASE, regex=True)== True),            
+            ((df['STATUS_NORMALIZADO'].str.contains('NÃO EXECUTADO',flags=re.IGNORECASE, regex=True)== True)) & (df['Status Execucao'].str.contains('ROLLBACK POR ERRO DE ELABORACAO DE SCRIPT',flags=re.IGNORECASE, regex=True)== True),            
+            (df['STATUS_NORMALIZADO'] == 'EXECUTADO'),
+            (df['STATUS_NORMALIZADO'] == 'CANCELADO'),
+        ]     
+            
+    
+        values = [
+            'PROBLEMA DE INFRA',
+            'ERRO DE PROCEDIMENTO',
+            'ERRO DE PLANEJAMENTO PROJETO',
+            'SEM ACESSO AO SITE',
+            'SEM ACESSO AO EQUIPAMENTO',
+            'ERRO DE ELABORACAO DE  SCRIPT',
+            'FALHA DE SOFTWARE',
+            'FALA DE TP',
+            'AUSÊNCIA DE TECNICO',
+            'FALHA DE PLANEJAMENTO DE PROJETO',
+            'FALTA DE TEMPO DE EXECUCAO',
+            'FALHA DE HARDWARE',
+            'CONFIGURACOES JA APLICADAS',
+            'FORA DO CRONOGRAMA',
+            'FALHA DE TX - FALHA DE TRANSMISSAO',
+            'FALHA DE TX - PROBLEMA DE INTERLIGACA',
+            'TP ESTAR ABERTO SEM AFETACAO',
+            'FALTA DE LICENCA',
+            'AFETACAO OU SEM REDUNDÂNCIA',
+            'ROLLBACK',
+            'ROLLBACK - ERRO SCRIPT',
+            'COM SUCESSO',
+            'CANCELADO',
+        ]
+    
+    
+    
+    
+        df['REPORT_NORMALIZADO'] = np.select(conditions, values)
+        
+        
+        
+    except(Exception) as erro:
+        print('Problemas com transformação do campo REPORT_NORMALIZADO. Erro: ', erro)
+    
+    else:
+        print('Coluna REPORT_NORMALIZADO criada com sucesso!')
+    return df
+        
+
+
+# In[6]:
+
+
+def F_EXPORTA_XLSX(p_df,p_path):
+    # Exportação da base
+    try:
+        p_df.to_excel(p_path, index=False )     
+        sleep(2)        
+    except(FileExistsError, FileNotFoundError) as erro:
+        print('Problemas ao exportar arquivo (3). \n', erro)
+    except(Exception) as erro:
+        print('Problemas ao exportar arquivo (3).  \n', erro)
+    else:
+        print('Exportação feita com sucesso!')
+        messagebox.showinfo("Fim do processo!",                             "Transformação e tratativas executadas com sucesso!\n\nArquivo salvo na pasta em: \n'C:/Projetos/Metro Alta/bases/")
+       
+        exit(0)
+    return p_df
+
+
+# In[7]:
+
+
+def REMOVE_DUPLICADA(df):
+    #Remove as atividades duplicadas do dataframe
+    try:
+        df["Duplicado"] = df["Numero"].astype(str) + df["Projeto"].astype(str)
+        df = df.drop_duplicates(subset=['Duplicado'])
+        print('Removendo Duplicadas.')
+        del df['Duplicado']
+        
+    except(Exception) as erro:
+        print('Problemas com a remoção de duplicadas. Erro: ', erro)
+    
+    else:
+        print('Duplicadas removidas com sucesso!')
+    return df
+        
+
+
+
+# In[8]:
+
+
+v_path_alta = F_PEGA_ARQ_RECENTE()
+dfalta = F_LENDO_CSV(v_path_alta, ';')
+
+
+# In[9]:
+
+
+dfalta = F_PADRONIZA_STATUS(dfalta)
+
+
+# In[10]:
+
+
+dfalta = F_PADRONIZA_REPORT(dfalta)
+
+
+# In[11]:
+
+
+#Para Exportar a tabela original tirar o comentário da linha
+
+#data_atual = date.today()
+#data_em_texto = data_atual.strftime("%Y%m%d")
+#v_path_dup = 'C:/Projetos/Metro Alta/bases/base-normalizada-ind-metro-baixo-'+data_em_texto+'original.xlsx'
+#F_EXPORTA_XLSX(dfalta,v_path_dup)
+
+
+# In[12]:
+
+
+dfalta = REMOVE_DUPLICADA(dfalta)
+
+
+# In[13]:
+
+
+data_atual = date.today()
+data_em_texto = data_atual.strftime("%Y%m%d")
+v_path_dup = 'C:/Projetos/Metro Alta/bases/base-normalizada-ind-metro-alta-'+data_em_texto+'.xlsx'
+F_EXPORTA_XLSX(dfalta,v_path_dup)
+
