@@ -1,0 +1,153 @@
+
+try:
+    import glob
+    import os.path
+    import pandas as pd
+    pd.options.mode.chained_assignment = None
+
+except(Exception) as erro:
+    print('Problemas com importação dos modulos:  \n', erro)
+
+
+#--------------------------------------------------------------------------------
+def ULTIMO_ARQUIVO(a_path):
+
+    # Verifica o ultimo arquivo da pasta.  \n
+    # a_path vai receber o caminho que esta o arquivo a ser lido. \n
+
+    try:
+        folder_path = a_path
+        file_type = '\*txt'
+        files = glob.glob(folder_path + file_type)
+        max_file = max(files, key=os.path.getctime)
+
+    except(Exception) as erro:
+        print('Problemas com o Diretório ou tipo de arquivo.  \n', erro)
+
+    return max_file
+
+#--------------------------------------------------------------------------------
+def F_LENDO_CSV(v_path):
+
+# Lendo a base de dados  \n
+# v_path vai receber o caminho que esta o arquivo a ser lido. \n
+# v_separador é a separação das colunas no arquivo ldo.\n
+
+    try:
+        df = pd.read_csv(v_path, header=None)
+
+    except(FileExistsError, FileNotFoundError) as erro:
+        print('Problemas com arquivo (1). \n', erro)
+    except(Exception) as erro:
+        print('Problemas com arquivo (2).  \n', erro)
+    else:
+        print('Dataframe criado com sucesso!')
+    return df
+
+#--------------------------------------------------------------------------------
+def TRATATIVA_ADJ(df_adj):
+    ####Tratativa das vizinhas de sites adjacentes
+
+    try:
+        #####Filtrar DF
+        df_adj = df_adj[df_adj[0].str.contains('configure') | df_adj[0].str.contains('EARFCN') | (df_adj[0].str.contains('\w{8}$', regex=True) & df_adj[0].str.contains('_', regex=True))]
+
+        #####DF filtro nomes site
+        df_adj_s = df_adj[(df_adj[0].str.contains('\w{8}$', regex=True) & df_adj[0].str.contains('_', regex=True))]
+        df_adj_s.rename(columns={0: 'Sites'}, inplace=True)
+
+        #####DF filtro comandos
+        df_adj_c = df_adj[~(df_adj[0].str.contains('\w{8}$', regex=True) & df_adj[0].str.contains('_', regex=True))]
+        df_adj_c.rename(columns={0: 'MML'}, inplace=True)
+
+        #####Drill Down células NaN
+        df_adj_final = pd.concat([df_adj_s, df_adj_c], axis=1)
+        df_adj_final['Sites'] = df_adj_final['Sites'].fillna(method="ffill")
+
+        #####Drop row com NaN
+        df_adj_final = df_adj_final.dropna()
+
+        ####Tratativa de whitespaces > 1
+        df_adj_final = df_adj_final.replace('\s\s+', ';', regex=True)
+
+        #####Linha para nome de colunas
+        new_header = df_adj_final.iloc[0]
+        df_adj_final = df_adj_final[1:]
+        df_adj_final.columns = new_header
+        df_adj_final = df_adj_final.reset_index(drop=True)
+
+
+    except(Exception) as erro:
+        print('Problemas com o Diretório ou tipo de arquivo.  \n', erro)
+
+    else:
+        print('DataFrame Vizinhas tratadas com sucesso!')
+    return df_adj_final
+
+#--------------------------------------------------------------------------------
+def TRATATIVA_ENBID(df_eid):
+
+    try:
+        ####Limpando dados
+        df_eid = df_eid[df_eid[0].str.contains('eNodeB')]
+        df_eid = df_eid[~df_eid[0].str.contains('List')]
+
+        ###Dividindo STR após 'igual'
+        df_eid = df_eid[0].str.split("=", n = 1, expand = True)
+        df_eid = df_eid.drop(columns= 0)
+
+        ###Identificando Sites no DF
+        ###Filtro para separar os DFs
+        df_eid_na = df_eid[df_eid[1].str.contains('_')]
+        df_eid_nu = df_eid[~df_eid[1].str.contains('_')]
+        ###Corrigindo Index
+        df_eid_na = df_eid_na.reset_index(drop=True)
+        df_eid_nu = df_eid_nu.reset_index(drop=True)
+        ###Concatenar DFs
+        df_eid_final = pd.concat([df_eid_na, df_eid_nu], axis=1, ignore_index=True)
+        df_eid_final.rename(columns={0:'Sites',1:'EnodebID'}, inplace=True)
+
+
+    except(Exception) as erro:
+        print('Problemas com o Diretório ou tipo de arquivo.  \n', erro)
+
+    else:
+        print('DataFrame Enodeb ID tratadas com sucesso!')
+
+    return df_eid_final
+
+#--------------------------------------------------------------------------------
+def SCRIPT_EUTRANEXTERNALCELL(df_eid):
+
+    try:
+        mml = 'MOD EUTRANEXTERNALCELL:MCC="724",MNC="'+MNC+'",ENODEBID='+ENODEBID+',CELLID='+CID+',DLEARFCN='+DLEARFCN+';'
+
+
+
+
+#--------------------------------------------------------------------------------
+#########Diretórios do Projeto#########
+
+###Diretório Dump LST EUTRANEXTERNALCELL
+diretorio_adj = 'C:/Users/a0125647/Downloads/VIZINHA'
+###Diretório Dump LST EnodebFunction
+diretorio_eid = 'C:/Users/a0125647/Downloads/ENODEBF'
+###Lista Sites Target
+sites =
+
+if __name__ == "__main__":
+
+    ####Tratativa LST EUTRANEXTERNALCELL
+    path_adj = ULTIMO_ARQUIVO(diretorio_adj)
+    df_adj = F_LENDO_CSV(path_adj)
+    df_adj = TRATATIVA_ADJ(df_adj)
+
+    ####Tratativa LST ENODEBFUNCTION
+    path_eid = ULTIMO_ARQUIVO(diretorio_eid)
+    df_eid = F_LENDO_CSV(path_eid)
+    df_eid = TRATATIVA_ENBID(df_eid)
+
+    ###Geração Script EUTRANEXTERNALCELL
+
+
+
