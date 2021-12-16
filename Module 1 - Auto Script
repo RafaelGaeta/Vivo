@@ -129,9 +129,9 @@ def SCRIPT_EUTRANEXTERNALCELL(df_eid):
 #########Diretórios do Projeto#########
 
 ###Diretório Dump LST EUTRANEXTERNALCELL
-diretorio_adj = 'C:/Users/a0125647/Downloads/VIZINHA'
+diretorio_adj = 'DIRECTORY'
 ###Diretório Dump LST EnodebFunction
-diretorio_eid = 'C:/Users/a0125647/Downloads/ENODEBF'
+diretorio_eid = 'DIRECTORY'
 ###Lista Sites Target
 sites =
 
