@@ -1,0 +1,106 @@
+# -*- coding: utf-8 -*-
+'''
+Created on Wed Jul 28 18:07:43 2021
+@author: Rafael Gaeta
+Exmplo de como instalar
+    python.exe -m pip install --upgrade pip
+    C:/Program Files/Python39/python.exe -m pip install -U ipykernel --user
+'''
+
+try:
+    from selenium import webdriver
+    from time import sleep
+    from datetime import datetime, timedelta
+    import tkinter as tk
+    from tkinter import messagebox
+except(Exception) as erro:
+    print('Problemas com importação dos modulos:  \n', erro)
+    
+    
+class ChromeAuto:
+    def __init__(self):
+        print("Verificando arquivos do chrome")
+        self.driver_path = 'DIRECTORY'
+        self.options = webdriver.ChromeOptions()
+        self.chrome = webdriver.Chrome(
+            self.driver_path,
+            options=self.options)
+        
+        
+    #Abre o app chrome
+    def acessa(self,site,msg):
+        try:
+            print("Acessando site "+ str(msg))
+            self.chrome.get(site)
+        except Exception as e:
+            print("Erro ao tentar acessar url", e)    
+        else:
+            print("Acesso ok!")
+
+
+    #Fecha o app chrome
+    def sair(self):
+        print("Fechando conexão com site")
+        self.chrome.quit()
+        sleep(5)
+        messagebox.showinfo("Fim do processo!", "Downloading feito com sucesso!")
+        
+        
+    #Procura os campos de login e senha e completa automaticamente
+    def preencher(self):
+        try:
+            print("Tentando fazer login no site")
+            campo_usuario = self.chrome.find_element_by_id("username")
+            campo_senha = self.chrome.find_element_by_id("passwd")            
+            campo_usuario.send_keys('LOGIN')
+            campo_senha.send_keys('PASS')
+            sleep(2)
+            botao_login = self.chrome.find_element_by_xpath('//button[text()="Login"]')
+            botao_login.click()
+        except Exception as e:
+            print("Erro ao fazer login", e)
+            
+
+    #Download Arquivo
+    def download(self):
+        try:
+            print("Fazendo downloading do arquivo")
+            botao_download = self.chrome.find_element_by_xpath('//button[text()="Exportar Cronograma"]')
+            botao_download.click()    
+            sleep(2)  
+        except Exception as e:
+            print("Erro ao fazer download", e)
+        else:
+            print("Download ok!")  
+
+
+##rotina de execução
+if __name__ == '__main__':
+    
+    hoje = datetime.today()
+    dia_semana = hoje.weekday()
+    calculo_seg = 7 + dia_semana
+    calgulo_sex = 2 + dia_semana
+
+    dataseg = (datetime.today() - timedelta(days=calculo_seg)).date()
+    datadom = (datetime.today() - timedelta(days=calgulo_sex)).date()
+        
+    ##Cria Link com filtro da ultima semana
+    #dataseg = (datetime.today() - timedelta(days=7)).date()
+    #datadom = (datetime.today() - timedelta(days=1)).date()
+    link_filtrado = ('https://portalimplantacao.vivo.com.br/cronograma/metro-baixa/listagem/?start_date='+str(dataseg.day)+'%2F'+str(dataseg.month)+'%2F'+str(dataseg.year)+'&end_date='+str(datadom.day)+'%2F'+str(datadom.month)+'%2F'+str(datadom.year)+'&status=&regional=&fornecedor=&ofensor=&elemento=&cn=&projeto_baixa=&atividade_baixa=&suporte=&tecnico=&oe=&site_enlace=&tp=&periodo_baixa=')
+    chrome = ChromeAuto()
+    chrome.acessa('https://portalimplantacao.vivo.com.br/login','home')
+    sleep(1)
+    print(f'Extraindo relatorio de {str(dataseg)} a {str(datadom)}')
+    chrome.preencher()
+    sleep(2)
+    chrome.acessa(link_filtrado," filtrando datas.")
+    sleep(5)
+    chrome.download()
+    sleep(10)
+    chrome.sair()     
+    exit()
+    
+
+
