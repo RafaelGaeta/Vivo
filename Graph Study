@@ -1,0 +1,291 @@
+###LEITURA/TRATATIVA ARQUIVOS
+servicos = pd.read_csv('/content/Servicos.csv')
+service_dict = {}
+servicos.apply(lambda row: service_dict.update({row['ARP_METRO']: row['QUANTIDADE_SERVICOS']}),axis=1)
+
+isis = pd.read_csv('/content/Routers.csv')
+
+
+isis['METRIC_A'] = isis.apply(lambda row: 10 if row['METRIC_A'] is np.nan else row['METRIC_A'],axis=1)
+isis['METRIC_A'] = isis['METRIC_A'].apply(lambda isis: isis.split(' ')[0] if 'level' in str(isis) else isis)
+isis['METRIC_A'] = isis['METRIC_A'].apply(lambda isis: int(isis))
+
+isis['METRIC_B'] = isis.apply(lambda row: 10 if row['METRIC_B'] is np.nan else row['METRIC_B'],axis=1)
+isis['METRIC_B'] = isis['METRIC_B'].apply(lambda isis: isis.split(' ')[0] if 'level' in str(isis) else isis)
+isis['METRIC_B'] = isis['METRIC_B'].apply(lambda isis: int(isis))
+
+lista_link = []
+isis.apply(lambda linha: lista_link.append((linha['EQUIPAMENTO_A'], linha['EQUIPAMENTO_B'], {'ISIS': linha['METRIC_A']})),axis=1)
+lista_link
+
+
+
+
+###CRIAÇÃO DOS GRAFOS
+GPI = nx.MultiGraph()
+GPI.add_edges_from(lista_PI)
+clustersPI = [c for c in nx.connected_components(GPI)]
+subGPI = nx.subgraph(GPI, nbunch=clustersPI[0])
+nbunchPI = [g for g in subGPI]
+
+
+
+###ITERAÇÃO VULNERABILIDADE
+from copy import deepcopy
+from operator import itemgetter
+
+single_path_edge = []
+l_aux = []
+ne_down_nodes = []
+
+
+
+for edge in subG.edges():
+	P = deepcopy(subG)
+	P = P.to_undirected()
+	P.remove_edge(*edge)
+	
+	if len(list(nx.connected_components(P))) > 1:
+
+		min_idx = min(enumerate([len(l) for l in nx.connected_components(P)]), key=itemgetter(1))[0]
+		n_bunch = [l for l in nx.connected_components(P)][min_idx]
+		ne_down_nodes.extend(n_bunch)
+		n_services = sum(service_dict.get(node, 0) for node in n_bunch)
+
+		min_l = min([len(l) for l in nx.connected_components(P)])
+		for l in nx.connected_components(P):
+			if len(l) == min_l:
+				list_cluster = l
+
+
+		l_aux.append((*edge, min_l, n_services,list_cluster))
+		single_path_edge.append(edge)
+
+
+df_simple_failure = pd.DataFrame(l_aux, columns=['host1','host2','ne_down','services','cluster']).sort_values('ne_down', ascending=False)
+
+
+df_simple_failure.sort_values('services', ascending=False).head(10)
+ne_down_nodes = set(ne_down_nodes)
+
+
+
+
+
+###TRATATIVA SIGTIM
+UF = 'ac'
+tickets = pd.read_csv(f'/content/{UF.lower()}_sigitm_ta.csv', encoding='ISO-8859-1', index_col=0)
+
+tickets = tickets.iloc[:, :25]
+keywords_link = ['ANEL COMUT','E-LIN','NTERMITENT%','NTERROMPID','OW RX/TX POWE','INERGI']
+keywords_node = ['NE ISOLADO','SEM GERENCIA','MAL_FUNCIONAMENTO']
+s1 = tickets.apply(lambda row:
+'TX_Link_Down' if ('Transmissão' in row['TIPO_REDE_GP'] and
+any([word in row['TQA_ALARME_TIPO'] for word in keywords_link]))
+else 'TX_NE_Down' if ('Transmissão' in row['TIPO_REDE_GP'] and
+any([word in row['TQA_ALARME_TIPO'] for word in keywords_node]))
+else row['TQA_ALARME_TIPO'] ,axis=1)
+tickets.insert(2, 'GRUPO_ALARME', s1)
+tickets = tickets.loc[tickets.apply(lambda row: row['GRUPO_ALARME'] in ['TX_NE_Down','TX_Link_Down'], axis=1)]
+tickets.dropna(subset=['TAX_DATA_BAIXA'], inplace=True)
+tickets['TQA_DATA_CRIACAO'] = tickets['TQA_DATA_CRIACAO'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
+tickets['DAY_DATA_CRIACAO'] = tickets['TQA_DATA_CRIACAO'].apply(lambda x: x.replace(hour=0, minute=0, second=0))
+tickets['TAX_DATA_BAIXA'] = tickets['TAX_DATA_BAIXA'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
+tickets['TIMEDELTA'] = tickets['TAX_DATA_BAIXA'] - tickets['TQA_DATA_CRIACAO']
+tickets['TIMEDELTA'] = tickets['TIMEDELTA'].apply(lambda x: x.total_seconds()/3600)
+#tickets['TIMEDELTA_std'] = sc.fit_transform(tickets['TIMEDELTA'].values.reshape(-1,1))
+#tickets = tickets.loc[tickets['TIMEDELTA_std'].apply(lambda x: abs(x) < 1)]
+tickets['HOSTNAME'] = tickets.apply(lambda row: row['HOSTNAME'].lower(), axis=1)
+
+
+router1 = []
+routers_alarme = []
+index_number = 0
+
+for linha in tickets['TQA_ALARME']:
+  routers = re.findall(r'\D{1,1}\-\D{1,2}\-\D{1,2}\-\D{1,3}\-\D{1,3}\-\D{1,3}\-\d{1,2} | \D{1,1}\-\D{1,2}\-\D{1,2}\-\D{1,4}\-\D{1,3}\-\D{1,3}\-\d{1,2}', linha)
+
+  for r in routers:
+    j = r.replace(' ','')
+    router1.append(j)
+  
+  if tickets.iloc[index_number]['GRUPO_ALARME'] == 'TX_Link_Down':
+    host = str(tickets.iloc[index_number]['HOSTNAME']).upper()
+    router1 = list(filter(lambda a: a != host, router1))
+    router1 = list(dict.fromkeys(router1))  ##Remove duplicidade na lista
+    router1 = ' '.join(router1)              ##Transforma lista em string
+    router1.strip()
+    routers_alarme.append(router1.lower())
+
+ 
+
+  else:
+    router1 = ' '.join(routers)
+    router1.strip()
+    routers_alarme.append(router1.lower())
+
+  index_number += 1
+  router1 = []
+
+tickets.insert(loc=7,
+          column='ROTEADORES AFETADOS',
+          value=routers_alarme, )
+
+tickets.head(5)
+
+
+tickets_NE_Down = tickets[tickets['GRUPO_ALARME'] == 'TX_NE_Down']
+NE_occurency = tickets_NE_Down['HOSTNAME'].value_counts().to_dict()
+
+df_simple_failure['Main_Total_Failure'] = (df_simple_failure['host1'].map(NE_occurency)) + (df_simple_failure['host2'].map(NE_occurency))
+df_simple_failure = df_simple_failure.fillna(0)
+
+
+
+df_cluster = df_simple_failure_PI['cluster'].to_frame()
+Lista_CL = []
+Maior_CL = df_simple_failure_PI['ne_down'].max()
+
+for i in range(Maior_CL):
+  Lista_CL.append('Router_' + str(i))
+
+df_cluster = pd.DataFrame(df_cluster['cluster'].to_list(), columns = [Lista_CL]).fillna(0)
+df_cluster_NE = df_cluster.copy()
+
+for i in range(Maior_CL):
+  df_cluster_NE['Failure_Router_'+str(i)] = (df_cluster_NE[(Lista_CL[i],)].map(NE_occurency)).fillna(0)
+
+
+
+df_simple_failure_PI = df_simple_failure_PI.reset_index(drop = True)
+df_cluster_NE = df_cluster_NE.reset_index(drop = True)
+
+df_NeDown = pd.merge(df_simple_failure_PI, df_cluster_NE, left_index=True, right_index=True)
+df_NeDown.sort_values('ne_down', ascending= False)
+
+
+
+
+
+###GRÁFICO DOS GRAFOS
+df_sf_filtrado = df_simple_failure_PI[df_simple_failure_PI['ne_down'] > 1]
+
+ListaR = []
+ListaTamanho = []
+ListaR = df_sf_filtrado['host1'].to_list()
+
+Lista_G = []
+Lista_NEcluster = df_simple_failure_PI['cluster'].to_list()
+for linha in Lista_NEcluster:
+  for ite in linha:
+    Lista_G.append(ite)
+
+for i in df_sf_filtrado['host2'].to_list():
+  ListaR.append(i)
+
+ListaCOR = []
+for i in nbunchPI:
+    if i in ListaR:
+      ListaTamanho.append(500)
+      ListaCOR.append('#C0392B')
+
+    else:
+      if i in Lista_G:
+        ListaTamanho.append(400)
+        ListaCOR.append('#F4D03F')
+
+      else: 
+        ListaCOR.append('#52BE80')
+        ListaTamanho.append(300)
+
+
+
+
+Color_Edge = []
+Width_Edge = []
+
+for edge in subGPI.edges():
+  if (edge[0] in df_sf_filtrado['host1'].to_list()) & (edge[1] in df_sf_filtrado['host2'].to_list()):
+    Color_Edge.append('r')
+    Width_Edge.append(1.5)
+  else:
+    Color_Edge.append('k')
+    Width_Edge.append(0.5)
+    
+    
+plt.figure(figsize=(60,60))
+nx.draw_networkx(subGPI, with_labels=True, 
+                 pos=nx.kamada_kawai_layout(subGPI),
+                 edge_cmap=plt.cm.cool,
+                 node_color  = ListaCOR,
+                 node_size = ListaTamanho,
+                 edge_color = Color_Edge,
+                 width = Width_Edge)
+                 
+                 
+
+
+tamanho = []
+for i in clusters:
+    tamanho.append(len(i))
+    
+occurrences = collections.Counter(tamanho)
+
+
+lista_estado = []
+lista_uf = []
+
+for i in clusters:
+  numero = clusters.index(i)
+  estado = list(clusters[numero])[0]
+  lista_estado.append(estado[:])
+
+for i in lista_estado:
+  lista_re = re.findall(r"(?:br-)(\w{2})",i)
+  lista_uf.append(lista_re[0])
+  
+
+
+dftamanho = pd.DataFrame(lista_uf)
+
+dftamanho.insert(loc=1,
+          column='Tamanho',
+          value=tamanho)
+
+dftamanho.insert(loc=2,
+          column='Clusters',
+          value=clusters)
+
+dftamanho.rename(columns={0:'UF'}, inplace=True)
+
+
+
+dftamanho
+
+
+
+keys = occurrences.keys()
+values = occurrences.values()
+figure(figsize=(20, 10), dpi=80)
+plt.bar(keys, values, width=2)
+plt.ylabel('Tamanho Cluster')
+plt.xlabel('Numero Cluster') 
+plt.show()
+
+
+rslt_df = dftamanho[dftamanho['Tamanho'] < 30]
+rslt_df = rslt_df['UF'].value_counts()
+ax = rslt_df.plot.bar(x='Estados', y='Numeros de Clusters Errados', rot=0)
+
+
+
+(dftamanho.groupby('UF')
+		.agg({'Clusters':'count', 'Tamanho': ['sum', 'min', 'max','mean']})
+		.reset_index()
+		.rename(columns={'Clusters':'N Clusters','Tamanho':'N Roteadores'})
+	)
+    
+    
+dftamanho.to_csv('dftamanho.csv',sep=",",index= False)
+files.download('dftamanho.csv')
+
